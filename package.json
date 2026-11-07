@@ -1,0 +1,30 @@
+{
+  "name": "kurashi-threads-auto-post",
+  "version": "1.7.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "scripts": {
+    "test": "node --test",
+    "demo": "node src/cli.js demo",
+    "report": "node src/cli.js report",
+    "run": "node src/cli.js run",
+    "backup": "node src/cli.js backup",
+    "restore-check": "node src/cli.js restore-check",
+    "site": "node src/cli.js site",
+    "test:browser": "node scripts/browser-smoke.mjs",
+    "export": "node src/cli.js export",
+    "cleanup": "node src/cli.js cleanup",
+    "check": "node --check src/cli.js && node --test"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "2.6.2",
+    "ajv": "8.20.0",
+    "jpeg-js": "0.4.4"
+  },
+  "devDependencies": {
+    "playwright": "1.65.0"
+  }
+}
