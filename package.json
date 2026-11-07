@@ -17,6 +17,8 @@
     "test:browser": "node scripts/browser-smoke.mjs",
     "export": "node src/cli.js export",
     "cleanup": "node src/cli.js cleanup",
+    "db:check": "node src/cli.js db-check",
+    "test:postgres": "KURASHI_PG_TEST=1 node --test test/postgres.test.js",
     "check": "node --check src/cli.js && node --test"
   },
   "dependencies": {

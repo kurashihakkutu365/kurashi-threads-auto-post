@@ -45,6 +45,10 @@ export class Store {
     return r && JSON.parse(r.data);
   }
   post(slot, sns) { return this.db.prepare('SELECT * FROM posts WHERE slot=? AND sns=?').get(slot, sns); }
+  history(sns,{since,kind,exceptSlot}={}) {
+    const rows=this.db.prepare('SELECT slot,kind,text FROM posts WHERE sns=? AND started_at>=? AND text IS NOT NULL ORDER BY started_at').all(sns,since);
+    return rows.filter(r=>(!kind||r.kind===kind)&&(!exceptSlot||r.slot!==exceptSlot)).map(r=>r.text);
+  }
   updatePost(slot, sns, state, fields = {}) {
     const allowed = ['text', 'container_id', 'remote_id', 'published_at', 'reason'];
     if (Object.keys(fields).some(k => !allowed.includes(k))) throw new Error('invalid_post_update');

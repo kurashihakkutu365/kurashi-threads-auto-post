@@ -30,7 +30,7 @@ export function styleFor(p) {
 export class Selection {
   constructor(store, api, vision, config) { Object.assign(this,{store,api,vision,config}); }
   async collect(day, now) {
-    const cached = this.store.cached(`collection:${day}`, now);
+    const cached = await this.store.cached(`collection:${day}`, now);
     if (cached) return cached;
     // One batch per day. The API adapter chooses rotating genres instead of querying every genre per slot.
     const candidates = await this.api.search({ day, genres: GENRES });
@@ -40,24 +40,24 @@ export class Selection {
       let p;
       try { p = { ...raw, canonical: canonicalId(raw) }; }
       catch { continue; }
-      if (selected.some(x=>x.canonical===p.canonical) || this.store.recentlyUsed(p.canonical,now,this.config.duplicateDays,'')) continue;
-      this.store.saveProduct(p,now);
+      if (selected.some(x=>x.canonical===p.canonical) || await this.store.recentlyUsed(p.canonical,now,this.config.duplicateDays,'')) continue;
+      await this.store.saveProduct(p,now);
       let pair;
-      try { pair = requirePair(this.store.images(p.id),'threads',now,{ai:true}); requirePair(pair,'instagram',now,{site:true}); }
+      try { pair = requirePair(await this.store.images(p.id),'threads',now,{ai:true}); requirePair(pair,'instagram',now,{site:true}); }
       catch { continue; }
       const key = `vision:${p.id}:${pair.map(i=>i.hash).sort().join(':')}:${this.vision.version}`;
-      let score = this.store.cached(key,now);
+      let score = await this.store.cached(key,now);
       if (!score) {
         // Local text prefilter and API rules run before the paid image evaluator.
         if (!this.vision.prefilter(p)) continue;
         score = await this.vision.evaluate(p,pair);
         scoreProduct(score);
-        this.store.cache(key,score,new Date(+now+180*86400000).toISOString());
+        await this.store.cache(key,score,new Date(+now+180*86400000).toISOString());
       }
       if (scoreProduct(score) >= 80) selected.push({...p,score:scoreProduct(score)});
     }
     selected.sort((a,b)=>b.score-a.score);
-    this.store.cache(`collection:${day}`,selected,new Date(+now+86400000).toISOString());
+    await this.store.cache(`collection:${day}`,selected,new Date(+now+86400000).toISOString());
     return selected;
   }
   async refresh(p, now) {

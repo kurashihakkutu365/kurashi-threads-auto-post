@@ -12,14 +12,29 @@ import { slotsForDay,jstDay } from './time.js';
 import { dailyBatch } from './daily.js';
 import { buildSite } from './site.js';
 import { report,backupDatabase,verifyRestore,exportDatabase } from './maintenance.js';
+import { SupabaseStore } from './supabase-store.js';
+import { backupRemote,decryptBackup,remoteReport } from './remote-maintenance.js';
 
-export async function main(command=process.argv[2],directory=resolve('var'),now=new Date()) {
-  const config=loadConfig();
+export async function main(command=process.argv[2],directory=resolve('var'),now=new Date(),{env=process.env,fetchImpl=fetch}={}) {
+  const config=loadConfig(undefined,env);
   // There is no production CLI path until persistent remote DB, verified credentials and platform review are integrated.
   if (!config.dryRun) throw new Error('production_runner_unavailable');
   mkdirSync(directory,{recursive:true});
-  const store=new Store(join(directory,command==='demo'?'demo.sqlite':'state.sqlite'));
+  const backend=env.STORAGE_BACKEND??config.storageBackend??'sqlite';
+  if(!['sqlite','supabase'].includes(backend)) throw new Error('invalid_storage_backend');
+  const remote=command==='db-check'||command==='db-restore'||backend==='supabase'&&command!=='demo';
+  const store=remote?new SupabaseStore({url:env.SUPABASE_URL,key:env.SUPABASE_SECRET_KEY||env.SUPABASE_SERVICE_ROLE_KEY,fetchImpl}):new Store(join(directory,command==='demo'?'demo.sqlite':'state.sqlite'));
   try {
+    if(command==='db-check') {
+      const health=await store.health();
+      if(health?.schemaVersion!==1) throw new Error('supabase_schema_mismatch');
+      return {connected:true,schemaVersion:1,storageBackend:'supabase',dryRun:config.dryRun};
+    }
+    if(command==='db-restore') {
+      if(process.argv[4]!=='--empty-target') throw new Error('restore_requires_empty_target_flag');
+      const snapshot=decryptBackup(process.argv[3],env.BACKUP_ENCRYPTION_KEY);
+      await store.restore(snapshot);return {restored:true,dryRun:config.dryRun};
+    }
     if (command==='demo') {
       const day=jstDay(now);
       const products=seedFixtures(store,now);
@@ -58,26 +73,46 @@ export async function main(command=process.argv[2],directory=resolve('var'),now=
       }
       return {dryRun:true,results};
     }
-    if (command==='report') return report(store,config,now);
-    if (command==='site') return {items:buildSite(store,join(directory,'site-preview'),config,now).length};
-    if (command==='backup') return await backupDatabase(store,join(directory,'backups/state.sqlite'));
-    if (command==='restore-check') return verifyRestore(join(directory,'backups/state.sqlite'));
-    if (command==='export') return {path:exportDatabase(store,join(directory,'private/export.json'))};
-    if (command==='cleanup') { store.cleanup(now,config.retentionDays); return {cleaned:true}; }
+    if (command==='report') return remote?await remoteReport(store,config,now):report(store,config,now);
+    if (command==='site') {
+      let source=store;
+      if(remote) {
+        const snapshot=await store.siteData();
+        source={products:()=>snapshot.products,images:id=>snapshot.images.filter(i=>i.productId===id)};
+      }
+      return {items:buildSite(source,join(directory,'site-preview'),config,now).length};
+    }
+    if (command==='backup') return remote?await backupRemote(store,join(directory,'backups/state.encrypted.json'),env.BACKUP_ENCRYPTION_KEY):await backupDatabase(store,join(directory,'backups/state.sqlite'));
+    if (command==='restore-check') {
+      if(remote){const snapshot=decryptBackup(join(directory,'backups/state.encrypted.json'),env.BACKUP_ENCRYPTION_KEY);return {schemaVersion:snapshot.schemaVersion,tables:Object.keys(snapshot.tables).length};}
+      return verifyRestore(join(directory,'backups/state.sqlite'));
+    }
+    if (command==='export') {
+      if(remote){const path=join(directory,'private/export.json');mkdirSync(join(directory,'private'),{recursive:true});writeFileSync(path,JSON.stringify(await store.export()),{mode:0o600});return {path};}
+      return {path:exportDatabase(store,join(directory,'private/export.json'))};
+    }
+    if (command==='cleanup') { await store.cleanup(now,config.retentionDays); return {cleaned:true}; }
     if (command==='product-import') {
       const p=JSON.parse(readFileSync(process.argv[3],'utf8'));
       if (!p.id || !p.name || !p.sourceEvidence) throw new Error('product_evidence_missing');
-      return {number:store.saveProduct({...p,canonical:canonicalId(p)},now).number};
+      return {number:(await store.saveProduct({...p,canonical:canonicalId(p)},now)).number};
     }
     if (command==='rights-import') {
       const image=JSON.parse(readFileSync(process.argv[3],'utf8'));
-      registerRights(store,image,now); return {registered:image.id};
+      // Local file bytes must be checked before granting any remote image record.
+      if(remote) {
+        const validationStore={product:()=>true,saveImage:()=>{}};
+        registerRights(validationStore,image,now);
+        if(!await store.product(image.productId)) throw new Error('unknown_product');
+        await store.saveImage(image);
+      } else registerRights(store,image,now);
+      return {registered:image.id};
     }
-    if (command==='stop') { store.setting('emergencyStop',true); return {emergencyStop:true}; }
+    if (command==='stop') { await store.setting('emergencyStop',true); return {emergencyStop:true}; }
     if (command==='sns-stop') {
       const sns=process.argv[3];
       if (!['threads','instagram'].includes(sns)) throw new Error('unsupported_platform');
-      store.setting(`stop:${sns}`,true); return {stopped:sns};
+      await store.setting(`stop:${sns}`,true); return {stopped:sns};
     }
     throw new Error('unknown_command');
   } finally { store.close(); }
