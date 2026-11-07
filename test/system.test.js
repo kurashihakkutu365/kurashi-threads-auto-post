@@ -361,7 +361,7 @@ test('emergency and individual platform stops happen before any network or prepa
   store.setting('emergencyStop',true);
   assert.equal((await engine.run(slotsForDay(DAY)[1],'threads',{product:p})).reason,'platform_stopped');
   assert.equal(publishers.instagram.calls.length,0);
-  c.termsStop=true; assert.equal(engine.stopped('threads'),true);
+  c.termsStop=true; assert.equal(await engine.stopped('threads'),true);
 });
 test('delayed scheduler skips old slots and never prepares media',async t=>{
   const {engine,p,slot,publishers}=setup(t); engine.clock=()=>new Date(+NOW+3600000);

@@ -1,6 +1,7 @@
 import Ajv from 'ajv';
 import { readFileSync,statSync } from 'node:fs';
 import { Budget } from './budget.js';
+import { SupabaseBudget } from './supabase-budget.js';
 import { request } from './http.js';
 import { COPY_SCHEMA,validateCopy,validateDaily } from './content.js';
 import { WEIGHTS,styleFor } from './products.js';
@@ -12,7 +13,7 @@ const DAILY_SCHEMA={type:'object',additionalProperties:false,required:['themes']
 
 export class OpenAIClient {
   constructor(store,config,{env=process.env,fetchImpl=fetch,clock=()=>new Date()}={}) {
-    Object.assign(this,{store,config,env,fetchImpl,clock}); this.budget=new Budget(store,config);
+    Object.assign(this,{store,config,env,fetchImpl,clock}); this.budget=store.kind==='supabase'?new SupabaseBudget(store,config):new Budget(store,config);
   }
   async structured({schema,prompt,images=[],category='text',essential=false}) {
     const c=this.config;
@@ -33,15 +34,15 @@ export class OpenAIClient {
     // This byte check is a conservative text lower gate, not a model-independent proof for image tokens.
     if (Buffer.byteLength(prompt)+Buffer.byteLength(JSON.stringify(schema))+2048>inputLimit) throw new Error('ai_input_bound');
     const maximum=this.budget.estimate(inputLimit,outputLimit);
-    const reservation=this.budget.reserve({category,service:`openai:${c.pricing.model}`,maximumYen:maximum,maximumTokens:inputLimit+outputLimit,essential},this.clock());
+    const reservation=await this.budget.reserve({category,service:`openai:${c.pricing.model}`,maximumYen:maximum,maximumTokens:inputLimit+outputLimit,essential},this.clock());
     const body={model:c.pricing.model,store:false,max_output_tokens:outputLimit,input:[{role:'user',content}],text:{format:{type:'json_schema',name:'kurashi_result',strict:true,schema}}};
     // A timeout keeps the reservation. No retry can accidentally incur a second charge.
     const response=await request('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${this.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify(body),fetchImpl:this.fetchImpl});
     const usage=response.usage;
     if (!usage || ![usage.input_tokens,usage.output_tokens].every(n=>Number.isInteger(n)&&n>=0)) throw new Error('ai_usage_unknown');
-    this.budget.settle(reservation,this.budget.estimate(usage.input_tokens,usage.output_tokens),usage.input_tokens+usage.output_tokens);
+    await this.budget.settle(reservation,this.budget.estimate(usage.input_tokens,usage.output_tokens),usage.input_tokens+usage.output_tokens);
     if(usage.input_tokens>inputLimit || usage.output_tokens>outputLimit) {
-      this.store.setting('emergencyStop',true); throw new Error('ai_usage_bound_exceeded');
+      await this.store.setting('emergencyStop',true); throw new Error('ai_usage_bound_exceeded');
     }
     if(response.status!=='completed') throw new Error('ai_incomplete');
     const texts=(response.output??[]).flatMap(o=>o.content??[]).filter(c=>c.type==='output_text').map(c=>c.text);

@@ -1,5 +1,6 @@
 {
   "dryRun": true,
+  "storageBackend": "sqlite",
   "emergencyStop": false,
   "termsStop": false,
   "platforms": { "threads": true, "instagram": true },

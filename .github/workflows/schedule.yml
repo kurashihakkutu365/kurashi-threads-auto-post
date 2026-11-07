@@ -21,6 +21,10 @@ jobs:
     timeout-minutes: 5
     env:
       DRY_RUN: 'true'
+      STORAGE_BACKEND: ${{ vars.STORAGE_BACKEND || 'sqlite' }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,5 +33,5 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run run
-      # No secrets, uploads, deployment or live publishing. Hosted runner disk is ephemeral.
-      # Replace the local DB with a transactional persistent store BEFORE enabling production.
+      # No uploads, deployment or live publishing. Use the repository variable STORAGE_BACKEND=supabase
+      # only after the manual connection check succeeds. Otherwise the local disk remains ephemeral.

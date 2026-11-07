@@ -1,0 +1,40 @@
+name: Monthly encrypted backup and report
+on:
+  workflow_dispatch:
+  schedule:
+    # Monthly report at 09:20 JST on day 1; budget periods independently change at 00:00 JST.
+    - cron: '20 0 1 * *'
+permissions:
+  contents: read
+concurrency:
+  group: kurashi-supabase
+  cancel-in-progress: false
+jobs:
+  maintenance:
+    if: vars.STORAGE_BACKEND == 'supabase'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DRY_RUN: 'true'
+      STORAGE_BACKEND: supabase
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run backup
+      - run: npm run restore-check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: monthly-encrypted-database-backup
+          path: var/backups/state.encrypted.json
+          retention-days: 90
+          if-no-files-found: error
+      - run: npm run cleanup
+      - run: npm run report

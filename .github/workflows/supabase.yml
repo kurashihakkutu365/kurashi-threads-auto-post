@@ -1,0 +1,50 @@
+name: Supabase connection and DRY_RUN
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 'check=接続確認 / run=投稿なしの状態記録 / report=集計 / backup=暗号化バックアップ'
+        required: true
+        default: check
+        type: choice
+        options: [check, run, report, backup]
+permissions:
+  contents: read
+concurrency:
+  group: kurashi-supabase
+  cancel-in-progress: false
+jobs:
+  connection:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DRY_RUN: 'true'
+      STORAGE_BACKEND: supabase
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+      OPERATION: ${{ inputs.operation }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Execute approved operation (SNS publishing is disabled)
+        run: |
+          case "$OPERATION" in
+            check) npm run db:check ;;
+            run) npm run run ;;
+            report) npm run report ;;
+            backup) npm run backup && npm run restore-check ;;
+            *) exit 1 ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        if: success() && inputs.operation == 'backup'
+        with:
+          name: encrypted-database-backup
+          path: var/backups/state.encrypted.json
+          retention-days: 30
+          if-no-files-found: error
