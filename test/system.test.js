@@ -400,6 +400,7 @@ test('official Meta protocol sends two children, carousel parent, then publish (
     const container=await pub.prepare({kind:'product',text:'【PR】デモ',images:[fixtureImage('p',1),fixtureImage('p',2)]});
     await pub.publish(container);
     assert.equal(calls.length,4);
+    assert.ok(calls.every(c=>new URL(c.url).hostname===(sns==='threads'?'graph.threads.com':'graph.facebook.com')));
     assert.equal(calls[0].body.is_carousel_item,'true');
     assert.equal(calls[2].body.media_type,'CAROUSEL');
     assert.equal(calls[2].body.children,'101,102');
