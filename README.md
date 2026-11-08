@@ -99,6 +99,8 @@ npm run test:browser
 
 ## 構成と今後
 
+InstagramのUnified Loginを使った読取専用チェックを追加しました。設定手順とActionsの実行方法は[INSTAGRAM_SETUP.md](docs/INSTAGRAM_SETUP.md)を参照してください。プロフィールの一致を確認するだけで、投稿や返信はしません。
+
 `src/`に機能別モジュール、`test/`に外部APIなしのテスト、`docs/`に調査・費用・移行条件を保存しています。
 本番の楽天連携、利用者Supabaseへの接続確認、Webhook/実返信API、トークン更新、通知、画像配信、Pages公開は残件です。
 月1,000円以内・5年間の無保守運用・正確な数分後の返信は保証しません。

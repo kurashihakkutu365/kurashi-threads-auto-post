@@ -1,6 +1,7 @@
 import { request } from './http.js';
 import { assertProduction } from './config.js';
 import { validateImage } from './rights.js';
+import { instagramApiBase } from './instagram-api.js';
 
 export class MockPublisher {
   constructor(sns) { this.sns=sns; this.calls=[]; this.fail=null; this.dryRunSafe=true; }
@@ -29,7 +30,7 @@ export class MetaPublisher {
     this.token=env[sns==='threads'?'THREADS_ACCESS_TOKEN':'INSTAGRAM_ACCESS_TOKEN'];
     const version=sns==='threads'?config.api.threadsVersion:config.api.instagramVersion;
     if (!/^v\d+\.\d+$/.test(version) || !/^\d+$/.test(this.user)) throw new Error('invalid_api_config');
-    this.base=`https://graph.${sns==='threads'?'threads':'instagram'}.com/${version}`;
+    this.base=sns==='threads'?`https://graph.threads.com/${version}`:instagramApiBase(config);
   }
   async call(path,data) {
     if (this.config.emergencyStop || this.config.termsStop || !this.config.platforms[this.sns]) throw new Error('platform_stopped');

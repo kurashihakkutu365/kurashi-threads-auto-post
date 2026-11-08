@@ -15,6 +15,7 @@ import { report,backupDatabase,verifyRestore,exportDatabase } from './maintenanc
 import { SupabaseStore } from './supabase-store.js';
 import { backupRemote,decryptBackup,remoteReport } from './remote-maintenance.js';
 import { checkThreadsConnection } from './threads-connection.js';
+import { checkInstagramConnection } from './instagram-connection.js';
 
 export async function main(command=process.argv[2],directory=resolve('var'),now=new Date(),{env=process.env,fetchImpl=fetch}={}) {
   const config=loadConfig(undefined,env);
@@ -22,6 +23,7 @@ export async function main(command=process.argv[2],directory=resolve('var'),now=
   if (!config.dryRun) throw new Error('production_runner_unavailable');
   // Read-only SNS diagnostics must not depend on a working DB or create local state.
   if(command==='threads-check') return checkThreadsConnection(config,{env,fetchImpl});
+  if(command==='instagram-check') return checkInstagramConnection(config,{env,fetchImpl});
   mkdirSync(directory,{recursive:true});
   const backend=env.STORAGE_BACKEND??config.storageBackend??'sqlite';
   if(!['sqlite','supabase'].includes(backend)) throw new Error('invalid_storage_backend');

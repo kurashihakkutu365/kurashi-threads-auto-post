@@ -20,7 +20,7 @@
   "paidAiEnabled": false,
   "aiLimits": { "maxInputTokens": null, "maxOutputTokens": 600, "maxVisionInputTokens": null },
   "pricing": { "model": null, "version": null, "inputUsdPerMillion": null, "outputUsdPerMillion": null, "verifiedAt": null },
-  "api": { "threadsVersion": "v1.0", "instagramVersion": "v27.0", "rakutenEndpoint": null },
+  "api": { "threadsVersion": "v1.0", "instagramVersion": "v27.0", "instagramLoginMode": "unified", "rakutenEndpoint": null },
   "retentionDays": 90,
   "imageLimits": { "maxBytes": 50000000, "maxFiles": 100, "maxTransferBytes": 200000000 },
   "site": { "url": "", "contact": "", "affiliateRegistrationConfirmed": false },
