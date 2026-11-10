@@ -1,0 +1,57 @@
+name: Rakuten confirmed milestones (no posting)
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 'examples=文章例 / status=登録状態 / record=確定成果の累計件数を登録（投稿はしません）'
+        type: choice
+        default: examples
+        options: [examples, status, record]
+        required: true
+      confirmed_count:
+        description: '楽天アフィリエイト全体でキャンセル等を除いた確定成果の累計件数。人数・商品点数・金額ではありません'
+        type: string
+        default: '0'
+      report_confirmed:
+        description: '楽天の成果レポートを自分で確認し、この件数が正しいことを確認しました（record時のみ必須）'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: kurashi-milestone-reports
+  cancel-in-progress: false
+jobs:
+  milestones:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DRY_RUN: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Show example thank-you posts
+        if: inputs.operation == 'examples'
+        run: npm run milestone:examples
+      - name: Register or inspect confirmed milestone state
+        if: inputs.operation != 'examples'
+        env:
+          STORAGE_BACKEND: supabase
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MILESTONE_CONFIRMED_COUNT: ${{ inputs.confirmed_count }}
+          MILESTONE_REPORT_CONFIRMED: ${{ inputs.report_confirmed }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          case "$OPERATION" in
+            record) npm run milestone:record ;;
+            status) npm run milestone:status ;;
+            *) exit 1 ;;
+          esac

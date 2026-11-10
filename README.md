@@ -99,6 +99,8 @@ npm run test:browser
 
 ## 構成と今後
 
+[確定成果の節目のお礼](docs/MILESTONE_THANKS.md)を追加しました。楽天アフィリエイト全体の確定成果が指定の節目に届いたことを手動登録すると、最新の節目のお礼を次の雑談枠と入れ替えます。003の適用が必要です。現在は投稿なしのDRY_RUNで、本番のお礼公開は開始しません。通常の雑談も迷い・本音・小さなツッコミを増やしています。
+
 [OpenAIで雑談3件を1回生成するテスト](docs/OPENAI_PREVIEW.md)を追加しました。**この手動Workflowだけはクレジットを消費します。** 明示チェック、固定モデル・トークン枠、Supabaseの同日1回制限を必要とし、通常の有料AI／SNS投稿は無効のままです。無料の`campaign:demo`とは別です。
 
 ユーザー指定の3案採点型プロンプトを追加しました。[修正版と運用条件](docs/SNS_AUTOMATION_PROMPT.md)を参照してください。`npm run campaign:demo`またはActionsの **Product copy preview (no posting, no AI charges)** で、最高得点案の選択とPR・楽天URL入りの両SNS本文を無料の模擬実行で確認できます。実商品・画像・OpenAIの自動取得は未接続です。

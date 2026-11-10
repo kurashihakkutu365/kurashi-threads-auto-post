@@ -46,3 +46,10 @@ export function seedDailyImages(store,themes,directory,now) {
     return image;
   });
 }
+export function mockThanksImage(theme,slot,directory,now) {
+  mkdirSync(directory,{recursive:true});const rendered=renderDailyImage(theme.text);
+  const id=`dry-only:thanks:${slot.id}:${theme.threshold}`;
+  const path=join(directory,`${id.replaceAll(/[^a-zA-Z0-9-]/g,'-')}.jpg`);writeFileSync(path,rendered.jpeg);
+  return {...fixtureImage(id,1,now),source:'original-text-template:dry-run-only',evidence:'Original thank-you text template; mock URL never fetched',hash:hashImageBytes(rendered.jpeg),storagePath:path,dryRunOnly:true};
+}
+function hashImageBytes(bytes){return createHash('sha256').update(bytes).digest('hex');}

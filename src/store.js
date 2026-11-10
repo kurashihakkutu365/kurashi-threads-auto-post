@@ -45,6 +45,14 @@ export class Store {
     return r && JSON.parse(r.data);
   }
   post(slot, sns) { return this.db.prepare('SELECT * FROM posts WHERE slot=? AND sns=?').get(slot, sns); }
+  compareMilestones(expectedRevision,state) {
+    return this.transaction(()=>{
+      const current=this.setting('rakuten_confirmed_milestones_v1');
+      if((current?.revision??0)!==expectedRevision)return false;
+      if(state.version!==1||state.revision!==expectedRevision+1)throw new Error('milestone_state_invalid');
+      this.setting('rakuten_confirmed_milestones_v1',state);return true;
+    });
+  }
   history(sns,{since,kind,exceptSlot}={}) {
     const rows=this.db.prepare('SELECT slot,kind,text FROM posts WHERE sns=? AND started_at>=? AND text IS NOT NULL ORDER BY started_at').all(sns,since);
     return rows.filter(r=>(!kind||r.kind===kind)&&(!exceptSlot||r.slot!==exceptSlot)).map(r=>r.text);

@@ -3,11 +3,13 @@ import { generateCopy,validateCopy,renderCopy,validateDaily } from './content.js
 import { slotState,slotsForDay } from './time.js';
 import { assertProduction } from './config.js';
 import { rankedCopyCacheKey,revalidateRankedCopy,renderRankedCopy } from './ranked-copy.js';
+import { MilestoneQueue } from './milestones.js';
 
 export class Engine {
-  constructor({store,config,selection,publishers,verifySite,generate,clock=()=>new Date()}) {
+  constructor({store,config,selection,publishers,verifySite,generate,createDailyImage,clock=()=>new Date()}) {
     generate??=config.productCopyMode==='ranked'?async()=>{throw new Error('campaign_generator_missing');}:generateCopy;
-    Object.assign(this,{store,config,selection,publishers,verifySite,generate,clock});
+    Object.assign(this,{store,config,selection,publishers,verifySite,generate,createDailyImage,clock});
+    this.milestones=new MilestoneQueue(store);
   }
   async stopped(sns) {
     return this.config.emergencyStop || this.config.termsStop || await this.store.setting('emergencyStop') ||
@@ -27,7 +29,7 @@ export class Engine {
     }
     if (!this.config.dryRun) assertProduction(this.config);
     if (!await this.store.claim(slot,sns,product,now,this.config)) return this.store.post(slot.id,sns);
-    let sending=false;
+    let sending=false,milestone=null;
     try {
       let text,images=[],p;
       if (slot.kind==='product') {
@@ -54,19 +56,27 @@ export class Engine {
         }
       } else {
         const history=await this.store.history(sns,{kind:'daily',since:new Date(+now-30*86400000).toISOString()});
-        text=validateDaily(daily,history).text;
+        milestone=await this.milestones.claim(slot,sns,{dryRun:this.config.dryRun,now,graceMinutes:this.config.slotGraceMinutes});
+        // Milestone dedupe is permanent per channel, separate from rehearsal history and normal chat similarity.
+        text=validateDaily(milestone??daily,milestone?[]:history).text;
         if (sns==='instagram') {
+          if(milestone) {
+            if(!this.createDailyImage)throw new Error('milestone_image_renderer_missing');
+            image=await this.createDailyImage({text,kind:'お礼',threshold:milestone.threshold},slot,now);
+          }
           validateImage(image,sns,now);
           if (!image.original) throw new Error('original_image_required');
           images=[image];
         }
       }
-      await this.store.updatePost(slot.id,sns,'prepared',{text});
+      if(milestone&&!await this.milestones.current(milestone))throw new Error('milestone_changed');
+      await this.store.updatePost(slot.id,sns,'prepared',{text,...(milestone?{reason:`thanks_milestone_${milestone.threshold}`}:{})});
       if (this.config.dryRun) {
         // Exercise preparation against a mock only, with no publish calls or network.
         if (this.publishers[sns]?.dryRunSafe !== true) throw new Error('unsafe_dry_run_adapter');
         const container=await this.publishers[sns].prepare({kind:slot.kind,text,images});
         await this.store.updatePost(slot.id,sns,'dry_run',{container_id:container});
+        if(milestone)await this.milestones.finish(milestone,'dry_run');
         return this.store.post(slot.id,sns);
       }
       // Production still cannot run through the bundled SQLite demo CLI.
@@ -89,14 +99,20 @@ export class Engine {
       }
       for (const i of images) validateImage(i,sns,finalNow,{site:sns==='instagram' && slot.kind==='product'&&this.config.productCopyMode!=='ranked'});
       if (await this.stopped(sns)) throw new Error('platform_stopped');
+      if(milestone&&!await this.milestones.current(milestone))throw new Error('milestone_changed');
       await this.store.updatePost(slot.id,sns,'sending'); sending=true;
+      if(milestone)await this.milestones.finish(milestone,'sending');
       const remote=await publisher.publish(container);
       await this.store.updatePost(slot.id,sns,'published',{remote_id:remote,published_at:this.clock().toISOString()});
+      if(milestone)await this.milestones.finish(milestone,'published');
     } catch(e) {
       // Even a failed DB update after publication leaves a sending/unknown hold, never a fresh attempt.
       const code=/^[a-z0-9_]+$/.test(e.message)?e.message:'internal_error';
       await this.store.updatePost(slot.id,sns,sending?'unknown':'skipped',{reason:code});
       await this.store.log(code,now);
+      if(milestone) {
+        try{await this.milestones.finish(milestone,sending?'unknown':'skipped');}catch{/* Ambiguous DB state holds the lease; never blindly release for another send. */}
+      }
     }
     return this.store.post(slot.id,sns);
   }
@@ -105,7 +121,10 @@ export class Engine {
     if (!p || !['sending','unknown'].includes(p.state)) return p;
     if (!p.container_id) return p;
     const r=await this.publishers[sns].reconcile(p.container_id);
-    if (r.state==='published' && r.remoteId) await this.store.updatePost(slot,sns,'published',{remote_id:r.remoteId,published_at:this.clock().toISOString()});
+    if (r.state==='published' && r.remoteId) {
+      await this.store.updatePost(slot,sns,'published',{remote_id:r.remoteId,published_at:this.clock().toISOString()});
+      const ticket=await this.milestones.ticketForPost(slot,sns);if(ticket)await this.milestones.finish(ticket,'published');
+    }
     return this.store.post(slot,sns);
   }
 }
