@@ -30,6 +30,7 @@ const config=()=>loadConfig(undefined,{});
 function setup(t,{live=false}={}) {
   const store=new Store(); t.after(()=>store.close());
   const c=config();
+  c.productCopyMode='legacy';
   if (live) {
     c.dryRun=false;
     c.production={enabled:true,persistentDatabaseVerified:true,permissionsVerified:true,hardBillingLimitVerified:true,termsVerifiedAt:new Date().toISOString()};
@@ -183,8 +184,8 @@ test('same product/image/model uses cache; changed model invalidates analysis',a
   vision.version='mock-v2'; await selection.collect(DAY,NOW);
   assert.equal(vision.calls,2);
 });
-test('eight genres include ordinary products; character-only filter is absent',()=>{
-  assert.equal(GENRES.length,8);
+test('nine genres include bedding and ordinary products; character-only filter is absent',()=>{
+  assert.equal(GENRES.length,9);
   for(const genre of GENRES) assert.equal(eligible({...fixtureProduct(1,NOW),genre}),true);
   assert.equal(eligible({...fixtureProduct(1,NOW),genre:'ゲーム'}),false);
 });

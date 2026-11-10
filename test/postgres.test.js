@@ -99,7 +99,7 @@ test('real PostgreSQL Supabase transaction contract',{skip:process.env.KURASHI_P
     await store.saveImage(fixtureImage(p.id,1,now));await store.saveImage(fixtureImage(p.id,2,now));
     const publishers={threads:new MockPublisher('threads'),instagram:new MockPublisher('instagram')};
     const selection=new Selection(store,new MockRakuten([p]),new MockVision(),config);
-    const engine=new Engine({store,config,selection,publishers,verifySite:async()=>true,clock:()=>now});
+    const engine=new Engine({store,config:{...config,productCopyMode:'legacy'},selection,publishers,verifySite:async()=>true,clock:()=>now});
     assert.equal((await engine.run(slot,'threads',{product:p})).state,'dry_run');
     assert.equal((await engine.run(slot,'threads',{product:p})).state,'dry_run');assert.equal(publishers.threads.calls.length,1);
     assert.equal((await store.history('threads',{since:new Date(+now-86400000).toISOString()})).length,1);
