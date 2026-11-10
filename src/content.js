@@ -47,7 +47,13 @@ export function renderCopy(copy,p,sns) {
   if (!text.startsWith('【PR】') || Array.from(text).length>(sns==='threads'?500:2200)) throw new Error('invalid_caption');
   return text;
 }
+export const isDailyQuestion=text=>/[?？]|教えて|聞かせて|どう思う|(?:です|ます)か(?:[。！!🥹]|$)/u.test(text);
 export function validateDaily(theme,history=[]) {
-  if (!theme || typeof theme.text!=='string' || theme.text.length<5 || theme.text.length>150 || /https?:|【PR】|買って|使ってみ|私が|昨日/.test(theme.text) || history.some(h=>similar(theme.text,h))) throw new Error('invalid_daily');
+  if (!theme || typeof theme.text!=='string' || Array.from(theme.text).length<60 || Array.from(theme.text).length>150 || /https?:|【PR】|#PR|買って|使ってみ|私が|昨日|愛用して|購入した|治る|必ず効く/.test(theme.text) || history.some(h=>similar(theme.text,h))) throw new Error('invalid_daily');
+  const lines=theme.text.split('\n');
+  if(lines.length!==2||lines.some(l=>!l.trim()||l.includes('\r'))||!lines[0].endsWith('。')||lines[0].slice(0,-1).includes('。'))throw new Error('daily_layout');
+  const questions=(theme.text.match(/[?？]/gu)??[]).length;
+  if(questions>1||(isDailyQuestion(theme.text)&&history.slice(-2).some(isDailyQuestion)))throw new Error('daily_question_frequency');
+  if((theme.text.match(/\p{Extended_Pictographic}/gu)??[]).length>2)throw new Error('too_many_emoji');
   return theme;
 }

@@ -1,5 +1,6 @@
 export const SLOTS = [
   ['07:00', 'product'], ['08:10', 'product'], ['10:30', 'daily'],
+  ['12:00', 'daily'],
   ['12:20', 'product'], ['16:00', 'daily'], ['17:40', 'product'], ['19:00', 'product'],
 ];
 export function jstDay(now = new Date()) { return new Date(+now + 9 * 3600000).toISOString().slice(0, 10); }

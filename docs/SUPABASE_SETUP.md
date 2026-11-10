@@ -47,7 +47,7 @@ anon、publishable key、DBパスワードでは動きません。
 接続確認に成功したら、GitHubの **Settings → Secrets and variables → Actions → Variables** に
 `STORAGE_BACKEND`というRepository variableを追加し、値を`supabase`にします。
 
-以降、7枠の既存スケジュールはSupabaseに投稿状態を記録します。
+以降、8枠のスケジュールはSupabaseに投稿状態を記録します。
 未設定時は従来のローカルSQLite方式で、Actions間の履歴は永続化されません。
 キーがない・DB停止・権限不足のときに、Supabaseからローカルへ自動的に切り替えて処理を続けることはありません。
 
@@ -94,3 +94,7 @@ Freeプランの容量・休止・帯域・プラン変更は月次で確認し�
 
 現在のプロジェクトへの接続は、上記の手順で別途確認する必要があります。
 ローカル実PostgreSQLテストと、利用者プロジェクトの接続成功を同一視しません。
+
+## 昼の雑談追加への更新
+
+既存・新規プロジェクトとも、001の後に[002_noon_daily.sql](../supabase/migrations/002_noon_daily.sql)を適用してください。[詳細手順](DAILY_PLAN.md)。上限は商品5・雑談3の計8件です。

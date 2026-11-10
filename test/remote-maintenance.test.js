@@ -44,3 +44,10 @@ test('blank modern key can fall back to the configured legacy service role JWT',
   }});
   assert.equal(result.connected,true);
 });
+test('old Supabase schedule stops run at health check with actionable migration reason',async t=>{
+  const calls=[];const env={STORAGE_BACKEND:'supabase',SUPABASE_URL:'https://test.supabase.co',SUPABASE_SECRET_KEY:'sb_secret_synthetic'};
+  await assert.rejects(()=>main('run',join(setup(t),'..'),new Date(),{env,fetchImpl:async(url,o)=>{calls.push(JSON.parse(o.body).action);return new Response('{"schemaVersion":1}');}}),/supabase_schedule_update_required/);
+  assert.deepEqual(calls,['health']);
+  const result=await main('db-check',join(setup(t),'..'),new Date(),{env,fetchImpl:async()=>new Response('{"schemaVersion":1,"scheduleVersion":2,"maxDailyPosts":8}')});
+  assert.equal(result.scheduleVersion,2);assert.equal(result.maxDailyPosts,8);
+});

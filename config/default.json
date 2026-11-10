@@ -5,7 +5,7 @@
   "emergencyStop": false,
   "termsStop": false,
   "platforms": { "threads": true, "instagram": true },
-  "dailyPostLimit": 7,
+  "dailyPostLimit": 8,
   "dailyReplyLimit": 20,
   "repliesEnabled": false,
   "slotGraceMinutes": 20,

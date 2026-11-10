@@ -62,12 +62,13 @@ test('missing production approval or authentication stops before API use',()=>{
   c.production={enabled:true,persistentDatabaseVerified:true,permissionsVerified:true,hardBillingLimitVerified:true,termsVerifiedAt:new Date().toISOString()};
   assert.throws(()=>assertProduction(c,{}),/missing_credentials/);
 });
-test('JST schedule contains exactly five products and two daily slots',()=>{
+test('JST schedule contains exactly five products and three daily slots including noon',()=>{
   const s=slotsForDay(DAY);
   assert.equal(s.filter(s=>s.kind==='product').length,5);
-  assert.equal(s.filter(s=>s.kind==='daily').length,2);
+  assert.equal(s.filter(s=>s.kind==='daily').length,3);
   assert.equal(s[0].scheduledAt,'2026-11-06T22:00:00.000Z');
-  assert.equal(s[6].scheduledAt,'2026-11-07T10:00:00.000Z');
+  assert.equal(s[7].scheduledAt,'2026-11-07T10:00:00.000Z');
+  assert.equal(s.find(s=>s.id.endsWith('/12:00')).scheduledAt,'2026-11-07T03:00:00.000Z');
 });
 test('JST management month changes at midnight JST',()=>{
   assert.equal(jstMonth(new Date('2026-11-30T14:59:59Z')),'2026-11');
@@ -165,7 +166,7 @@ test('daily AI generates two validated themes in one request',async t=>{
     calls++;
     return jsonResponse({status:'completed',usage:{input_tokens:200,output_tokens:100},output:[{content:[{type:'output_text',text:JSON.stringify({themes:dailyBatch(DAY)})}]}]});
   });
-  assert.equal((await client.daily()).length,2); assert.equal(calls,1);
+  assert.equal((await client.daily()).length,3); assert.equal(calls,1);
 });
 
 test('Rakuten mock search batches once per JST day and caches image analysis',async t=>{
@@ -449,8 +450,8 @@ test('site publication verifies JSON, rendered HTML and expected image',async t=
   await assert.rejects(()=>verifySiteProduct(product,store.images(p.id),c,{fetchImpl:async()=>jsonResponse({items:[]}),now:NOW}),/site_product_mismatch/);
 });
 test('daily batch excludes recent themes and contains no affiliate URLs or fake experience',()=>{
-  const first=dailyBatch(DAY); assert.equal(first.length,2);
-  const second=dailyBatch('2026-11-08',first.map(t=>t.text)); assert.equal(second.length,2);
+  const first=dailyBatch(DAY); assert.equal(first.length,3);
+  const second=dailyBatch('2026-11-08',first.map(t=>t.text)); assert.equal(second.length,3);
   for(const theme of [...first,...second]) assert.ok(validateDaily(theme));
   assert.throws(()=>validateDaily({text:'私が買ってみた https://example.com'}),/invalid_daily/);
 });
@@ -459,8 +460,8 @@ test('original static Instagram template renders a readable 1080-square JPEG',()
   assert.equal(rendered.jpeg[0],0xff); assert.equal(rendered.jpeg[1],0xd8);
   const decoded=jpeg.decode(rendered.jpeg);
   assert.equal(decoded.width,1080); assert.equal(decoded.height,1080);
-  assert.ok(rendered.svg.includes('font-size="48"'));
-  assert.throws(()=>renderDailyImage('あ'.repeat(150)),/image_text_overflow/);
+  assert.ok(rendered.svg.includes('font-size="40"'));
+  assert.throws(()=>renderDailyImage('あ'.repeat(151)),/invalid_daily/);
 });
 test('Threads daily post is text-only; Instagram requires an original licensed image',async t=>{
   const {engine,publishers}=setup(t); const slot=slotsForDay(DAY)[2]; engine.clock=()=>new Date(slot.scheduledAt);
@@ -559,10 +560,10 @@ test('monthly report separates committed estimates from actual bills and contain
   assert.equal(r.month,'2026-11'); assert.equal(r.budgetTargetYen,1000); assert.equal(r.budget.actualBilled,null);
   assert.ok(!JSON.stringify(r).includes('ACCESS_TOKEN'));
 });
-test('full offline day targets 14 posts, five products and two daily themes',async t=>{
+test('full offline day targets 16 posts, five products and three daily themes',async t=>{
   const result=await main('demo',temp(t),NOW);
   assert.equal(result.mockOnly,true);
-  assert.equal(result.posts.filter(p=>p.state==='dry_run').reduce((n,p)=>n+p.count,0),14);
+  assert.equal(result.posts.filter(p=>p.state==='dry_run').reduce((n,p)=>n+p.count,0),16);
   assert.equal(result.searchCalls,1); assert.equal(result.visionCalls,7);
   assert.equal(result.budget.committed,0);
 });

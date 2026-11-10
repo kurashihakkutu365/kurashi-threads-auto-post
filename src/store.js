@@ -67,7 +67,7 @@ export class Store {
       const n = this.db.prepare(`SELECT COUNT(*) n FROM posts WHERE sns=? AND scheduled_at>=? AND scheduled_at<? AND state IN ('preparing','prepared','sending','unknown','published','dry_run')`).get(sns, from, to).n;
       if (n >= config.dailyPostLimit) throw new Error('daily_post_limit');
       const kindCount = this.db.prepare(`SELECT COUNT(*) n FROM posts WHERE sns=? AND kind=? AND scheduled_at>=? AND scheduled_at<? AND state IN ('preparing','prepared','sending','unknown','published','dry_run')`).get(sns,slot.kind,from,to).n;
-      if (kindCount >= (slot.kind==='product'?5:2)) throw new Error('daily_kind_limit');
+      if (kindCount >= (slot.kind==='product'?5:3)) throw new Error('daily_kind_limit');
       this.db.prepare('INSERT INTO posts(slot,sns,state,kind,canonical,product_id,scheduled_at,started_at) VALUES(?,?,?,?,?,?,?,?)').run(slot.id,sns,'preparing',slot.kind,p?.canonical ?? null,p?.id ?? null,slot.scheduledAt,now.toISOString());
       return true;
     });
