@@ -18,11 +18,18 @@ import { checkThreadsConnection } from './threads-connection.js';
 import { checkInstagramConnection } from './instagram-connection.js';
 import { campaignFixture } from './campaign-fixtures.js';
 import { selectRankedCopy,renderRankedCopy } from './ranked-copy.js';
+import { runOpenAIPreview } from './openai-preview.js';
 
 export async function main(command=process.argv[2],directory=resolve('var'),now=new Date(),{env=process.env,fetchImpl=fetch}={}) {
   const config=loadConfig(undefined,env);
   // There is no production CLI path until persistent remote DB, verified credentials and platform review are integrated.
   if (!config.dryRun) throw new Error('production_runner_unavailable');
+  if(command==='openai-preview') {
+    if(env.OPENAI_PREVIEW_APPROVED!=='true')throw new Error('openai_preview_confirmation_required');
+    if(env.STORAGE_BACKEND!=='supabase')throw new Error('openai_preview_requires_supabase');
+    const store=new SupabaseStore({url:env.SUPABASE_URL,key:env.SUPABASE_SECRET_KEY||env.SUPABASE_SERVICE_ROLE_KEY,fetchImpl});
+    try{return await runOpenAIPreview(store,config,{env,fetchImpl,now});}finally{store.close();}
+  }
   // Read-only SNS diagnostics must not depend on a working DB or create local state.
   if(command==='threads-check') return checkThreadsConnection(config,{env,fetchImpl});
   if(command==='instagram-check') return checkInstagramConnection(config,{env,fetchImpl});
