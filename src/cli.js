@@ -7,7 +7,7 @@ import { Engine } from './engine.js';
 import { Selection,canonicalId } from './products.js';
 import { registerRights } from './rights.js';
 import { MockPublisher } from './publishers.js';
-import { MockRakuten,MockVision,seedFixtures,seedDailyImages } from './fixtures.js';
+import { MockRakuten,MockVision,seedFixtures,seedDailyImages,mockThanksImage } from './fixtures.js';
 import { slotsForDay,jstDay } from './time.js';
 import { dailyBatch } from './daily.js';
 import { buildSite } from './site.js';
@@ -19,11 +19,17 @@ import { checkInstagramConnection } from './instagram-connection.js';
 import { campaignFixture } from './campaign-fixtures.js';
 import { selectRankedCopy,renderRankedCopy } from './ranked-copy.js';
 import { runOpenAIPreview } from './openai-preview.js';
+import { MILESTONES,MilestoneQueue,thankYou } from './milestones.js';
 
 export async function main(command=process.argv[2],directory=resolve('var'),now=new Date(),{env=process.env,fetchImpl=fetch}={}) {
   const config=loadConfig(undefined,env);
   // There is no production CLI path until persistent remote DB, verified credentials and platform review are integrated.
   if (!config.dryRun) throw new Error('production_runner_unavailable');
+  if(command==='milestone-examples')return {examplesOnly:true,published:false,examples:MILESTONES.map(threshold=>({threshold,...thankYou(threshold)}))};
+  if(['milestone-record','milestone-status'].includes(command)) {
+    if(env.STORAGE_BACKEND!=='supabase')throw new Error('milestone_requires_supabase');
+    if(command==='milestone-record'&&env.MILESTONE_REPORT_CONFIRMED!=='true')throw new Error('milestone_report_confirmation_required');
+  }
   if(command==='openai-preview') {
     if(env.OPENAI_PREVIEW_APPROVED!=='true')throw new Error('openai_preview_confirmation_required');
     if(env.STORAGE_BACKEND!=='supabase')throw new Error('openai_preview_requires_supabase');
@@ -44,6 +50,14 @@ export async function main(command=process.argv[2],directory=resolve('var'),now=
   const remote=command==='db-check'||command==='db-restore'||backend==='supabase'&&command!=='demo';
   const store=remote?new SupabaseStore({url:env.SUPABASE_URL,key:env.SUPABASE_SECRET_KEY||env.SUPABASE_SERVICE_ROLE_KEY,fetchImpl}):new Store(join(directory,command==='demo'?'demo.sqlite':'state.sqlite'));
   try {
+    if(command==='milestone-status') {
+      const health=await store.milestoneHealth();if(health?.milestoneVersion!==1)throw new Error('milestone_setup_required');
+      return {milestoneVersion:1,state:await new MilestoneQueue(store).read()??null,published:false};
+    }
+    if(command==='milestone-record') {
+      if(!/^(0|[1-9]\d*)$/.test(env.MILESTONE_CONFIRMED_COUNT??''))throw new Error('milestone_count_invalid');
+      return await new MilestoneQueue(store).record(Number(env.MILESTONE_CONFIRMED_COUNT),{confirmed:true,by:env.GITHUB_ACTOR??'operator',now});
+    }
     if(command==='run'&&remote&&(await store.health())?.scheduleVersion!==2)throw new Error('supabase_schedule_update_required');
     if(command==='db-check') {
       const health=await store.health();
@@ -56,7 +70,7 @@ export async function main(command=process.argv[2],directory=resolve('var'),now=
       await store.restore(snapshot);return {restored:true,dryRun:config.dryRun};
     }
     if (command==='demo') {
-      // Keep the original 14-slot regression demo separate from the new campaign preview.
+      // Keep the 16-post regression demo separate from the new campaign preview.
       config.productCopyMode='legacy';
       const day=jstDay(now);
       const products=seedFixtures(store,now);
@@ -87,7 +101,8 @@ export async function main(command=process.argv[2],directory=resolve('var'),now=
       // Scheduled dry-run intentionally has no fake production products or downloaded images.
       const publishers={threads:new MockPublisher('threads'),instagram:new MockPublisher('instagram')};
       const selection=new Selection(store,new MockRakuten([]),new MockVision(),config);
-      const engine=new Engine({store,config,selection,publishers,verifySite:async()=>false,clock:()=>now});
+      const engine=new Engine({store,config,selection,publishers,verifySite:async()=>false,clock:()=>now,
+        createDailyImage:async(theme,slot,at)=>mockThanksImage(theme,slot,join(directory,'private-images'),at)});
       const results=[];
       for(const slot of slotsForDay(jstDay(now))) {
         if (Date.parse(slot.scheduledAt)>+now) continue;

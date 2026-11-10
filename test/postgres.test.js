@@ -10,6 +10,7 @@ import { loadConfig } from '../src/config.js';
 import { Engine } from '../src/engine.js';
 import { Selection } from '../src/products.js';
 import { MockPublisher } from '../src/publishers.js';
+import { MilestoneQueue,MILESTONE_KEY } from '../src/milestones.js';
 
 test('real PostgreSQL Supabase transaction contract',{skip:process.env.KURASHI_PG_TEST!=='1'},async t=>{
   const container=process.env.KURASHI_PG_CONTAINER??'kurashi-pg-test';
@@ -28,13 +29,16 @@ test('real PostgreSQL Supabase transaction contract',{skip:process.env.KURASHI_P
   await sql(migration); await sql(migration);
   const noonMigration=readFileSync(new URL('../supabase/migrations/002_noon_daily.sql',import.meta.url),'utf8');
   await sql(noonMigration);await sql(noonMigration);
+  const milestoneMigration=readFileSync(new URL('../supabase/migrations/003_milestone_state.sql',import.meta.url),'utf8');
+  await sql(milestoneMigration);await sql(milestoneMigration);
   const reset=()=>sql('TRUNCATE public.kurashi_products,public.kurashi_images,public.kurashi_cache,public.kurashi_settings,public.kurashi_posts,public.kurashi_usage,public.kurashi_events,public.kurashi_opt_outs,public.kurashi_logs RESTART IDENTITY;');
   const fetchImpl=async(url,options)=>{
     const {action,args}=JSON.parse(options.body);
     const encoded=Buffer.from(JSON.stringify(args)).toString('base64');
     if(!/^[a-zA-Z]+$/.test(action)) throw new Error('invalid_test_action');
     try {
-      const raw=await sql(`SET ROLE service_role; SELECT public.kurashi_store_v1('${action}',convert_from(decode('${encoded}','base64'),'UTF8')::jsonb);`);
+      const endpoint=url.endsWith('/kurashi_milestones_v1')?'kurashi_milestones_v1':'kurashi_store_v1';
+      const raw=await sql(`SET ROLE service_role; SELECT public.${endpoint}('${action}',convert_from(decode('${encoded}','base64'),'UTF8')::jsonb);`);
       return new Response(raw||'null',{status:200});
     } catch(error) {
       const message=error.message.match(/ERROR:\s+([a-z_]+)\s/)[1];
@@ -95,6 +99,18 @@ test('real PostgreSQL Supabase transaction contract',{skip:process.env.KURASHI_P
     const id=await budget.reserve({category:'other',service:'mock',maximumYen:100},at);await budget.settle(id,50,2);await budget.recordBill(id,1001);
     assert.equal(await budget.mode(at),'stop');
     assert.equal((await budget.totals(new Date('2026-11-30T15:00:00Z'))).committed,0);
+  });
+  await t.test('milestone CAS rejects stale writers, serializes claims, preserves state on migration and restore',async()=>{
+    await reset();const q=new MilestoneQueue(store),at=new Date('2026-11-07T10:30:00+09:00'),dailySlot=slotsForDay('2026-11-07').find(s=>s.kind==='daily');
+    await q.record(12,{confirmed:true,now:at});const saved=await q.read();
+    assert.equal(await store.compareMilestones(0,{...saved,revision:1}),false);
+    const leases=await Promise.all(Array.from({length:5},()=>q.claim(dailySlot,'threads',{now:at})));assert.equal(leases.filter(Boolean).length,1);assert.equal(leases.find(Boolean).threshold,10);
+    await q.finish(leases.find(Boolean),'dry_run');await sql(milestoneMigration);
+    assert.equal((await q.read()).events.find(e=>e.threshold===10).dry.threads.state,'dry_run');
+    for(const role of ['anon','authenticated'])await assert.rejects(()=>sql(`SET ROLE ${role}; SELECT public.kurashi_milestones_v1('health');`),/permission denied/);
+    const snapshot=await store.export();assert.ok(snapshot.tables.settings.some(row=>row.key===MILESTONE_KEY));await reset();await store.restore(snapshot);
+    assert.equal(await q.claim(dailySlot,'threads',{now:at}),null);
+    assert.equal((await q.claim(dailySlot,'instagram',{now:at})).threshold,10);
   });
   await t.test('one-shot AI preview quota is atomic across runners and remains consumed after settlement',async()=>{
     await reset();const budget=new SupabaseBudget(store,{...config,maxAiCallsPerDay:1,maxAiTokensPerDay:9200});

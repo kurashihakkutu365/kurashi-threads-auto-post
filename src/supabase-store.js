@@ -3,6 +3,7 @@ import { jstMonth } from './time.js';
 
 const CODES=new Set(['duplicate_product','daily_post_limit','daily_kind_limit','invalid_slot','invalid_post_update','unknown_post','budget_throttled','monthly_budget','category_budget','daily_ai_limit','all_stopped','invalid_reservation','invalid_settlement','unknown_reservation','invalid_bill','invalid_product','unknown_product','invalid_image_hash','unsupported_store_action','invalid_restore','restore_target_not_empty']);
 CODES.add('invalid_store_config');
+CODES.add('milestone_state_invalid');
 
 export class SupabaseStore {
   constructor({url,key,fetchImpl=fetch,timeoutMs=15000}) {
@@ -17,16 +18,18 @@ export class SupabaseStore {
     }
     Object.assign(this,{url:parsed.origin,key,fetchImpl,timeoutMs,kind:'supabase'});
   }
-  async rpc(action,args={}) {
+  async rpc(action,args={},endpoint='kurashi_store_v1') {
+    if(!['kurashi_store_v1','kurashi_milestones_v1'].includes(endpoint))throw new Error('invalid_store_endpoint');
     const headers={'Content-Type':'application/json',apikey:this.key};
     // New sb_secret keys go only in apikey, never as an invalid Bearer JWT.
     if(!this.key.startsWith('sb_secret_')) headers.Authorization=`Bearer ${this.key}`;
     let response;
-    try { response=await this.fetchImpl(`${this.url}/rest/v1/rpc/kurashi_store_v1`,{method:'POST',headers,body:JSON.stringify({action,args}),redirect:'error',signal:AbortSignal.timeout(this.timeoutMs)}); }
+    try { response=await this.fetchImpl(`${this.url}/rest/v1/rpc/${endpoint}`,{method:'POST',headers,body:JSON.stringify({action,args}),redirect:'error',signal:AbortSignal.timeout(this.timeoutMs)}); }
     catch { throw new Error('supabase_result_unknown'); }
     let value;
     try { value=await response.json(); } catch { throw new Error('supabase_response_invalid'); }
     if (!response.ok) {
+      if(endpoint==='kurashi_milestones_v1'&&response.status===404)throw new Error('milestone_setup_required');
       // Never surface provider response bodies; they can contain keys, SQL or personal data.
       if(CODES.has(value?.message)) throw new Error(value.message);
       throw new Error(response.status===401||response.status===403?'supabase_access_denied':response.status===429?'supabase_rate_limited':'supabase_unavailable');
@@ -43,6 +46,8 @@ export class SupabaseStore {
   cached(key,now=new Date()) { return this.rpc('cached',{key,now:now.toISOString()}); }
   cache(key,value,expiresAt) { return this.rpc('cache',{key,value,expiresAt}); }
   setting(key,value) { return this.rpc('setting',{key,...(value===undefined?{}:{value})}); }
+  compareMilestones(expectedRevision,state){return this.rpc('cas',{expectedRevision,state},'kurashi_milestones_v1');}
+  milestoneHealth(){return this.rpc('health',{},'kurashi_milestones_v1');}
   post(slot,sns) { return this.rpc('post',{slot,sns}); }
   updatePost(slot,sns,state,fields={}) { return this.rpc('updatePost',{slot,sns,state,fields}); }
   recentlyUsed(canonical,now,days,exceptSlot) { return this.rpc('recentlyUsed',{canonical,now:now.toISOString(),days,exceptSlot}); }
