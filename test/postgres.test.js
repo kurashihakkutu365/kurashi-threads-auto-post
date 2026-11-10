@@ -96,6 +96,16 @@ test('real PostgreSQL Supabase transaction contract',{skip:process.env.KURASHI_P
     assert.equal(await budget.mode(at),'stop');
     assert.equal((await budget.totals(new Date('2026-11-30T15:00:00Z'))).committed,0);
   });
+  await t.test('one-shot AI preview quota is atomic across runners and remains consumed after settlement',async()=>{
+    await reset();const budget=new SupabaseBudget(store,{...config,maxAiCallsPerDay:1,maxAiTokensPerDay:9200});
+    const request={category:'text',service:'synthetic-openai-preview',maximumYen:2.28,maximumTokens:9200};
+    const results=await Promise.allSettled(Array.from({length:5},()=>budget.reserve(request,now)));
+    const success=results.filter(r=>r.status==='fulfilled');assert.equal(success.length,1);
+    assert.ok(results.filter(r=>r.status==='rejected').every(r=>/daily_ai_limit/.test(r.reason.message)));
+    await budget.settle(success[0].value,0.1,100);
+    await assert.rejects(()=>budget.reserve(request,now),/daily_ai_limit/);
+    assert.ok(await budget.reserve(request,new Date(+now+86400000)));
+  });
   await t.test('noon upgrade preserves data, grants, and permits 5 product plus 3 daily claims',async()=>{
     await reset();await store.setting('upgrade-proof','kept');await sql(noonMigration);
     assert.equal(await store.setting('upgrade-proof'),'kept');

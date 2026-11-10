@@ -10,6 +10,7 @@
     "test": "node --test",
     "demo": "node src/cli.js demo",
     "campaign:demo": "node src/cli.js campaign-demo",
+    "openai:preview": "node src/cli.js openai-preview",
     "report": "node src/cli.js report",
     "run": "node src/cli.js run",
     "backup": "node src/cli.js backup",

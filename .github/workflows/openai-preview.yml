@@ -1,0 +1,39 @@
+name: OpenAI daily preview (uses credits, no posting)
+on:
+  workflow_dispatch:
+    inputs:
+      spend_credits:
+        description: '雑談3件を1回生成。予約見積り約2.3円（$0.0114、1ドル200円で計算）。クレジット消費に同意する'
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+concurrency:
+  group: kurashi-openai-preview
+  cancel-in-progress: false
+jobs:
+  preview:
+    if: ${{ inputs.spend_credits == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DRY_RUN: 'true'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Generate three daily examples once without publishing
+        run: npm run openai:preview
+        env:
+          STORAGE_BACKEND: supabase
+          OPENAI_PREVIEW_APPROVED: 'true'
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

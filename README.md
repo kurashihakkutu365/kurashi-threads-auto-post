@@ -99,6 +99,8 @@ npm run test:browser
 
 ## 構成と今後
 
+[OpenAIで雑談3件を1回生成するテスト](docs/OPENAI_PREVIEW.md)を追加しました。**この手動Workflowだけはクレジットを消費します。** 明示チェック、固定モデル・トークン枠、Supabaseの同日1回制限を必要とし、通常の有料AI／SNS投稿は無効のままです。無料の`campaign:demo`とは別です。
+
 ユーザー指定の3案採点型プロンプトを追加しました。[修正版と運用条件](docs/SNS_AUTOMATION_PROMPT.md)を参照してください。`npm run campaign:demo`またはActionsの **Product copy preview (no posting, no AI charges)** で、最高得点案の選択とPR・楽天URL入りの両SNS本文を無料の模擬実行で確認できます。実商品・画像・OpenAIの自動取得は未接続です。
 
 InstagramのUnified Loginを使った読取専用チェックを追加しました。設定手順とActionsの実行方法は[INSTAGRAM_SETUP.md](docs/INSTAGRAM_SETUP.md)を参照してください。プロフィールの一致を確認するだけで、投稿や返信はしません。
