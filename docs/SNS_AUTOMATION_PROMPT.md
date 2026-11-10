@@ -69,7 +69,7 @@ npm run campaign:demo
 
 またはActionsの **Product copy preview (no posting, no AI charges)** を実行してください。架空の商品と模擬採点で、3案の構築→採点計算→最高得点の選択→両SNSの本文を確認できます。OpenAI・楽天・Metaへの通信や投稿はせず、Secretsも不要です。
 
-既存の`npm run demo`は14枠の従来形式の回帰検証用です。新しい投稿形式の確認には`campaign:demo`を使います。
+既存の`npm run demo`は16件の従来商品形式の回帰検証用です。新しい投稿形式の確認には`campaign:demo`を使います。
 
 ## 実運用までの残件
 
@@ -79,4 +79,6 @@ npm run campaign:demo
 * OpenAI APIキー、実モデルと現行単価、トークン上限、請求制限の設定。現在`paidAiEnabled: false`を維持。
 * スケジュールへの実データアダプターと`generate: p => client.copy(p)`の接続、実投稿の検証。
 
-DRY_RUN、月額合計1,000円の既存目標、7枠/日の上限、緊急停止、unknown再送防止を維持します。今回の更新だけで本番の自動投稿は開始されません。
+DRY_RUN、月額合計1,000円の既存目標、8枠/日の上限、緊急停止、unknown再送防止を維持します。今回の更新だけで本番の自動投稿は開始されません。
+
+雑談の書式・レパートリーと昼枠追加は[DAILY_PLAN.md](DAILY_PLAN.md)を参照。

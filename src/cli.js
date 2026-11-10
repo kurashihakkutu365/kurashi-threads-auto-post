@@ -37,10 +37,11 @@ export async function main(command=process.argv[2],directory=resolve('var'),now=
   const remote=command==='db-check'||command==='db-restore'||backend==='supabase'&&command!=='demo';
   const store=remote?new SupabaseStore({url:env.SUPABASE_URL,key:env.SUPABASE_SECRET_KEY||env.SUPABASE_SERVICE_ROLE_KEY,fetchImpl}):new Store(join(directory,command==='demo'?'demo.sqlite':'state.sqlite'));
   try {
+    if(command==='run'&&remote&&(await store.health())?.scheduleVersion!==2)throw new Error('supabase_schedule_update_required');
     if(command==='db-check') {
       const health=await store.health();
       if(health?.schemaVersion!==1) throw new Error('supabase_schema_mismatch');
-      return {connected:true,schemaVersion:1,storageBackend:'supabase',dryRun:config.dryRun};
+      return {connected:true,schemaVersion:1,...(health.scheduleVersion?{scheduleVersion:health.scheduleVersion,maxDailyPosts:health.maxDailyPosts}:{}),storageBackend:'supabase',dryRun:config.dryRun};
     }
     if(command==='db-restore') {
       if(process.argv[4]!=='--empty-target') throw new Error('restore_requires_empty_target_flag');

@@ -26,6 +26,8 @@ test('real PostgreSQL Supabase transaction contract',{skip:process.env.KURASHI_P
   await sql("DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon; END IF; IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated; END IF; IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='service_role') THEN CREATE ROLE service_role; END IF; END $$;");
   const migration=readFileSync(new URL('../supabase/migrations/001_store.sql',import.meta.url),'utf8');
   await sql(migration); await sql(migration);
+  const noonMigration=readFileSync(new URL('../supabase/migrations/002_noon_daily.sql',import.meta.url),'utf8');
+  await sql(noonMigration);await sql(noonMigration);
   const reset=()=>sql('TRUNCATE public.kurashi_products,public.kurashi_images,public.kurashi_cache,public.kurashi_settings,public.kurashi_posts,public.kurashi_usage,public.kurashi_events,public.kurashi_opt_outs,public.kurashi_logs RESTART IDENTITY;');
   const fetchImpl=async(url,options)=>{
     const {action,args}=JSON.parse(options.body);
@@ -70,7 +72,7 @@ test('real PostgreSQL Supabase transaction contract',{skip:process.env.KURASHI_P
   await t.test('invalid slots and unsafe client-supplied limits are refused by the DB itself',async()=>{
     await reset();
     await assert.rejects(()=>store.claim({...slot,kind:'daily'},'threads',null,now,config),/invalid_slot/);
-    await assert.rejects(()=>store.claim(slot,'threads',null,now,{...config,dailyPostLimit:8}),/invalid_store_config/);
+    await assert.rejects(()=>store.claim(slot,'threads',null,now,{...config,dailyPostLimit:9}),/invalid_store_config/);
     await assert.rejects(()=>store.claim(slot,'threads',null,now,{...config,duplicateDays:1}),/invalid_store_config/);
   });
   await t.test('concurrent cost reservations cannot exceed monthly budget',async()=>{
@@ -93,6 +95,19 @@ test('real PostgreSQL Supabase transaction contract',{skip:process.env.KURASHI_P
     const id=await budget.reserve({category:'other',service:'mock',maximumYen:100},at);await budget.settle(id,50,2);await budget.recordBill(id,1001);
     assert.equal(await budget.mode(at),'stop');
     assert.equal((await budget.totals(new Date('2026-11-30T15:00:00Z'))).committed,0);
+  });
+  await t.test('noon upgrade preserves data, grants, and permits 5 product plus 3 daily claims',async()=>{
+    await reset();await store.setting('upgrade-proof','kept');await sql(noonMigration);
+    assert.equal(await store.setting('upgrade-proof'),'kept');
+    assert.equal((await store.health()).scheduleVersion,2);assert.equal((await store.health()).maxDailyPosts,8);
+    const slots=slotsForDay('2026-11-07');
+    for(const s of slots)assert.equal(await store.claim(s,'threads',null,new Date(s.scheduledAt),config),true);
+    assert.equal(await sql("SELECT count(*) FROM public.kurashi_posts WHERE sns='threads';"),'8');
+    const noon=slots.find(s=>s.id.endsWith('/12:00'));
+    assert.equal(await store.claim(noon,'threads',null,new Date(noon.scheduledAt),config),false);
+    await assert.rejects(()=>store.claim({...slots[1],kind:'daily'},'instagram',null,now,config),/invalid_slot/);
+    await reset();for(const s of slots.slice(0,7))await store.claim(s,'threads',null,new Date(s.scheduledAt),config);
+    await assert.rejects(()=>store.claim(slots[7],'threads',null,new Date(slots[7].scheduledAt),{...config,dailyPostLimit:7}),/daily_post_limit/);
   });
   await t.test('remote Engine persists dry-run state; a restarted runner never re-prepares the same slot',async()=>{
     await reset();const p=fixtureProduct(1,now);await store.saveProduct(p,now);

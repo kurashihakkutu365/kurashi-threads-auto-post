@@ -42,7 +42,7 @@ test('daily quota and product deduplication are one server-side claim request',a
   const s=new SupabaseStore(opts(async(u,o)=>{calls.push(JSON.parse(o.body));return response(true);}));
   assert.equal(await s.claim({id:'2026-11-07/07:00'},'threads',null,new Date('2026-11-06T22:00:00Z'),loadConfig(undefined,{})),true);
   assert.equal(calls.length,1); assert.equal(calls[0].action,'claim');
-  assert.deepEqual(calls[0].args.config,{duplicateDays:30,dailyPostLimit:7});
+  assert.deepEqual(calls[0].args.config,{duplicateDays:30,dailyPostLimit:8});
 });
 test('remote budget delegates reservation without a read-then-write race',async()=>{
   const c=loadConfig(undefined,{}),calls=[];
