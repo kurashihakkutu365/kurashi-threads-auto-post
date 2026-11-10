@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { requirePair } from './rights.js';
 
-export const GENRES = ['インテリア','収納','日用品雑貨','文房具','手芸','キッチン用品','食器','調理器具'];
+export const GENRES = ['インテリア','寝具','収納','日用品雑貨','文房具','手芸','キッチン用品','食器','調理器具'];
 export const WEIGHTS = { design: 40, originality: 20, usefulness: 15, quality: 10, value: 10, social: 5 };
 export function canonicalId(p) {
   if (p.gtin && /^\d{8,14}$/.test(p.gtin)) return `gtin:${p.gtin}`;
@@ -11,7 +11,7 @@ export function canonicalId(p) {
 }
 export function eligible(p) {
   return !!p && GENRES.includes(p.genre) && p.available === true && Number.isFinite(p.price) && p.price > 0 &&
-    p.reviewAverage >= 4 && p.reviewCount >= 30 && p.affiliateRate >= 10 && !!p.name && !!p.description;
+    Number.isFinite(p.reviewAverage) && p.reviewAverage >= 4.3 && p.reviewAverage <= 5 && Number.isInteger(p.reviewCount) && p.reviewCount >= 100 && p.affiliateRate >= 10 && !!p.name && !!p.description;
 }
 export function scoreProduct(scores) {
   if (!scores || Object.keys(scores).length !== 6) throw new Error('invalid_score');
@@ -43,7 +43,7 @@ export class Selection {
       if (selected.some(x=>x.canonical===p.canonical) || await this.store.recentlyUsed(p.canonical,now,this.config.duplicateDays,'')) continue;
       await this.store.saveProduct(p,now);
       let pair;
-      try { pair = requirePair(await this.store.images(p.id),'threads',now,{ai:true}); requirePair(pair,'instagram',now,{site:true}); }
+      try { pair = requirePair(await this.store.images(p.id),'threads',now,{ai:true}); requirePair(pair,'instagram',now,{site:this.config.productCopyMode!=='ranked'}); }
       catch { continue; }
       const key = `vision:${p.id}:${pair.map(i=>i.hash).sort().join(':')}:${this.vision.version}`;
       let score = await this.store.cached(key,now);

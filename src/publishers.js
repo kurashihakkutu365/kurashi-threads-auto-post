@@ -40,7 +40,7 @@ export class MetaPublisher {
   }
   async prepare(payload) {
     if (payload.kind==='product' && payload.images.length!==2) throw new Error('two_licensed_images_required');
-    for (const image of payload.images) validateImage(image,this.sns,new Date(),{site:this.sns==='instagram' && payload.kind==='product'});
+    for (const image of payload.images) validateImage(image,this.sns,new Date(),{site:this.sns==='instagram' && payload.kind==='product'&&this.config.productCopyMode!=='ranked'});
     if (payload.kind==='product' && new Set(payload.images.map(i=>i.hash)).size!==2) throw new Error('two_licensed_images_required');
     const endpoint=this.sns==='threads'?'threads':'media';
     const captionKey=this.sns==='threads'?'text':'caption';
